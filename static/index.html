@@ -1,0 +1,21 @@
+<html>
+
+<body>
+  <div style="display: flex; flex-direction: column; width: 500px; gap: 5px">
+    <h1>Welcome cruel world!</h1>
+    <h2>
+      This is a random chat! click to join the dark side of the internet
+    </h2>
+    <button id="join">join</button>
+  </div>
+
+  <script type="module">
+    import {v4 as uuidv4} from "https://jspm.dev/uuid";
+    const btn = document.getElementById("join");
+    btn.onclick = () => {
+      window.location.href = `/chat/${uuidv4()}`;
+    };
+  </script>
+</body>
+
+</html>
