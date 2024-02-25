@@ -2,8 +2,7 @@ package routes
 
 import (
 	"context"
-	"encoding/json"
-	"go-chat/utils"
+	"go-chat/manager"
 	"html/template"
 	"log"
 	"net/http"
@@ -17,6 +16,8 @@ func SetUpChatRouters(server *http.ServeMux) {
 	server.Handle("GET /chat/{id}", http.HandlerFunc(renderChatPage))
 	server.Handle("GET /chat/connect/{id}", http.HandlerFunc(handleChatStart))
 }
+
+var clientManager = manager.NewManager()
 
 func renderChatPage(res http.ResponseWriter, req *http.Request) {
 	data, err := os.ReadFile(path.Join("templates", "chat.templ.html"))
@@ -35,72 +36,25 @@ func renderChatPage(res http.ResponseWriter, req *http.Request) {
 }
 
 func handleChatStart(res http.ResponseWriter, req *http.Request) {
-	// @TODO: verify chatId is a valid uuid to prevent overflow issue etc...
 	chatId := req.PathValue("id")
 	conn, err := websocket.Accept(res, req, nil)
 	if err != nil {
 		log.Println(err)
 		return
 	}
-	// @TODO: investigate if we should use just "Close"
 	defer conn.CloseNow()
 
-	currentClient := NewClient(conn)
-	_, ok := clients[chatId]
-	if !ok {
-		clients[chatId] = append(make([]*Client, 0), currentClient)
-	} else {
-		clients[chatId] = append(clients[chatId], currentClient)
-	}
+	client := manager.NewClient(conn)
+	clientManager.Append(client, chatId)
 
-	// also returns if loop should end or not
-	handleErr := func(err error) bool {
-		if err == nil {
-			return false
-		}
-
-		log.Println(err)
-		clients[chatId] = utils.Filter(clients[chatId], func(elm *Client) bool { return elm.conn != conn })
-		return true
-	}
 	for {
 		_, data, err := conn.Read(context.Background())
-		if handleErr(err) {
+		if err != nil {
+			log.Println(err)
+			clientManager.Remove(client, chatId)
 			break
 		}
 
-		chatMembers := clients[chatId]
-		for _, m := range chatMembers {
-			if m != currentClient {
-				err := m.Write(data, currentClient)
-				if handleErr(err) {
-					break
-				}
-			}
-		}
+		clientManager.WriteClientMsg(client, chatId, data)
 	}
 }
-
-type Client struct {
-	id   string
-	conn *websocket.Conn
-}
-
-func NewClient(conn *websocket.Conn) *Client {
-	return &Client{conn: conn, id: utils.RandomName()}
-}
-
-func (c *Client) Write(data []byte, sender *Client) error {
-	msg, err := json.Marshal(struct {
-		Msg    string `json:"msg"`
-		Sender string `json:"sender"`
-  }{Msg:string(data), Sender: sender.id})
-	if err != nil {
-		return err
-	}
-
-	return c.conn.Write(context.Background(), websocket.MessageText, msg)
-}
-
-// @TODO: make this thread safe
-var clients = make(map[string][]*Client)
