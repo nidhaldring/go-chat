@@ -15,7 +15,10 @@ type ClientManager struct {
 }
 
 func NewManager() *ClientManager {
-	return &ClientManager{}
+	return &ClientManager{
+		mu:      sync.Mutex{},
+		clients: make(map[string][]*Client),
+	}
 }
 
 func (cm *ClientManager) Append(c *Client, id string) {
