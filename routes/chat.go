@@ -1,7 +1,6 @@
 package routes
 
 import (
-	"context"
 	"go-chat/manager"
 	"html/template"
 	"log"
@@ -47,11 +46,12 @@ func handleChatStart(res http.ResponseWriter, req *http.Request) {
 	client := manager.NewClient(conn)
 	clientManager.Append(client, chatId)
 
+	client.Init()
 	for {
-		_, data, err := conn.Read(context.Background())
+		data, err := client.ListenToMsg()
 		if err != nil {
-			log.Println(err)
 			clientManager.Remove(client, chatId)
+			log.Println(err)
 			break
 		}
 

@@ -1,38 +1,29 @@
 <html>
 
 <body>
-  <div style="display: flex; flex-direction: column; width: 500px; gap: 5px">
-    <textarea style="width: 500px; height: 500px; border: 1px solid black" readonly id="chat">
-    </textarea>
-    <input id="text" style="height: 30px" />
-    <button style="padding: 10px; maring: 10px" id="sendBtn">send</button>
+  <div style="display: flex; flex-direction: row; gap: 50px">
+    <div style="
+          display: flex;
+          flex-direction: column;
+          justify-content: space-between;
+        ">
+      <p id="name">loading...</p>
+      <textarea style="width: 500px; height: 500px; border: 1px solid black" readonly id="chat">
+      </textarea>
+      <div>
+        <!-- @TODO: style this later please -->
+        <input id="text" style="height: 30px" />
+        <input type="file" id="attachment" name="avatar" accept="image/png, image/jpeg" />
+      </div>
+      <button style="padding: 10px; maring: 10px" id="sendBtn">send</button>
+    </div>
+    <div style="display: flex; flex-direction: column">
+      <h3>status</h3>
+      <div id="status"></div>
+    </div>
   </div>
 
-  <script>
-    const btn = document.getElementById("sendBtn");
-    const inputText = document.getElementById("text");
-    const chatArea = document.getElementById("chat");
-
-    const appendTextToChat = (text) => {
-      chatArea.innerHTML = chatArea.innerHTML + "\n" + text;
-    };
-
-    const clearChatInput = () => {
-      inputText.value = "";
-    };
-
-    btn.onclick = () => {
-      socket.send(inputText.value);
-      appendTextToChat(`me: ${inputText.value}`);
-      clearChatInput();
-    };
-
-    const socket = new WebSocket("ws://localhost:5000/chat/connect/{{.Id}}");
-    socket.addEventListener("message", (event) => {
-      const {msg, sender} = JSON.parse(event.data);
-      appendTextToChat(`${sender}: ${msg}`);
-    });
-  </script>
+  <script src="/chat.js"></script>
 </body>
 
 </html>
