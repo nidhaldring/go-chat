@@ -43,7 +43,6 @@ const socket = new WebSocket(`ws://localhost:5000/chat/connect/${chatId}`);
 socket.addEventListener("message", (event) => {
   const { msg, sender, type } = JSON.parse(event.data);
 
-  console.log(type);
   switch (type) {
     case eventTypes.init:
       chatterName.innerHTML = `Hi <strong>${sender}</strong>, type something!`;

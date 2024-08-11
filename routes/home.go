@@ -15,7 +15,6 @@ func SetUpHomePageRouters(server *http.ServeMux) {
 
 func handleStaticFiles(res http.ResponseWriter, req *http.Request) {
 	filePath := path.Join(".", "static", req.URL.Path)
-
 	info, err := os.Stat(filePath)
 	if err != nil {
 		if errors.Is(err, fs.ErrNotExist) {

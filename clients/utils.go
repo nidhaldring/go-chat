@@ -1,4 +1,4 @@
-package manager
+package clients
 
 import "math/rand"
 
@@ -16,7 +16,7 @@ func filter[T comparable](arr []T, predicate func(T) bool) []T {
 func randomName() string {
 	name := ""
 	for i := 0; i < 10; i++ {
-		name += string(rand.Intn('z'-'a') + 'a')
+		name += string(rune(rand.Intn('z'-'a') + 'a'))
 	}
 	return name
 }
