@@ -115,9 +115,11 @@ func (c *Client) broadcastStatusUpdate(ctx context.Context, r *redis.Client) {
 	defer cancel()
 
 	res := r.PubSubNumSub(ctx, c.chatId)
-	count := fmt.Sprint(res.Val()[c.chatId])
+	count := res.Val()[c.chatId]
 
-	r.Publish(ctx, c.chatId, event{Msg: count, Type: Status})
+  // @TODO: add "active since" to the status
+	msg := fmt.Sprintf("Members count %d", count)
+	r.Publish(ctx, c.chatId, event{Msg: msg, Type: Status})
 }
 
 type eventType string
