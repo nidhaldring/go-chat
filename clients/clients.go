@@ -3,47 +3,33 @@ package clients
 import (
 	"context"
 	"encoding/json"
+	"fmt"
+	"log"
 	"time"
 
+	"github.com/redis/go-redis/v9"
 	"nhooyr.io/websocket"
 )
 
-type event struct {
-	Type   string `json:"type"`
-	Msg    string `json:"msg"`
-	Sender string `json:"sender"`
-}
-
-// @TODO: replace this feature with redis
-// func (cm *ClientManager) Append(c *Client, chatId string) {
-// 	cm.mu.Lock()
-// 	defer cm.mu.Unlock()
-// 	if _, ok := cm.clients[chatId]; !ok {
-// 		cm.clients[chatId] = append(make([]*Client, 0), c)
-// 	} else {
-// 		cm.clients[chatId] = append(cm.clients[chatId], c)
-// 	}
-
-// 	cm.notifyAllSession(
-// 		fmt.Sprintf("members: %d,active since: %s", len(cm.clients[chatId]), cm.activeSince.Format(time.ANSIC)),
-// 		chatId,
-// 	)
-// }
+var r = redis.NewClient(&redis.Options{})
 
 type Client struct {
-	id   string
-	conn *websocket.Conn
+	id     string
+	conn   *websocket.Conn
+	chatId string
 }
 
-func NewClient(conn *websocket.Conn) *Client {
-	return &Client{conn: conn, id: randomName()}
+func NewClient(conn *websocket.Conn, chatId string) *Client {
+	c := &Client{conn: conn, id: randomName(), chatId: chatId}
+
+	return c
 }
 
-func (c *Client) Write(ctx context.Context, data string, senderId string) error {
+func (c *Client) Write(ctx context.Context, e event) error {
 	ctx, cancel := context.WithTimeout(ctx, time.Minute*5)
 	defer cancel()
 
-	msg, err := json.Marshal(event{Msg: data, Sender: senderId, Type: "message"})
+	msg, err := e.MarshalBinary()
 	if err != nil {
 		return err
 	}
@@ -51,7 +37,14 @@ func (c *Client) Write(ctx context.Context, data string, senderId string) error 
 	return c.conn.Write(ctx, websocket.MessageText, msg)
 }
 
-func (c *Client) ListenToMsg(ctx context.Context) ([]byte, error) {
+// Send random created client name to frontend app
+// @TODO: ofc this is not a good idea please change this
+func (c *Client) SendClientName(ctx context.Context) error {
+	e := event{SenderId: c.id, Type: "init"}
+	return c.Write(ctx, e)
+}
+
+func (c *Client) listenToMsg(ctx context.Context) ([]byte, error) {
 	// @TODO: properly handle timeout here, it does not make sense to cancel conn
 	// if the user didn't send a message but is still active on chat
 	ctx, cancel := context.WithTimeout(ctx, time.Minute*5)
@@ -61,16 +54,86 @@ func (c *Client) ListenToMsg(ctx context.Context) ([]byte, error) {
 	return msg, err
 }
 
-func (c *Client) Init() error {
-	msg, err := json.Marshal(event{Sender: c.id, Type: "init"})
-	if err != nil {
-		return err
-	}
+func (c *Client) PublishOwnMessages(
+	ctx context.Context,
+	errCh chan error,
+) {
+	ctx, cancel := context.WithCancel(ctx)
+	defer cancel()
 
-	c.conn.Write(context.Background(), websocket.MessageText, msg)
-	return nil
+	for {
+		select {
+		case <-ctx.Done():
+			return
+		default:
+			data, err := c.listenToMsg(ctx)
+			if err != nil {
+				errCh <- err
+				return
+			}
+
+			// @TODO: handle the case when connection is closed
+			s := r.Publish(ctx, c.chatId, event{SenderId: c.id, Msg: string(data), Type: Normal})
+			log.Println(s)
+		}
+	}
 }
 
-func (c *Client) GetId() string {
-	return c.id
+func (c *Client) ListenToOtherMessages(
+	ctx context.Context,
+	errCh chan error,
+) {
+	ctx, cancel := context.WithCancel(ctx)
+	defer cancel()
+
+	sub := r.Subscribe(ctx, c.chatId)
+	c.broadcastStatusUpdate(ctx, r)
+
+	var event event
+	ch := sub.Channel()
+	for {
+		select {
+		case msg := <-ch:
+			err := json.Unmarshal([]byte(msg.Payload), &event)
+			if err != nil {
+				errCh <- err
+				return
+			}
+
+			if event.Type == Status || event.SenderId != c.id {
+				c.Write(ctx, event)
+			}
+
+		case <-ctx.Done():
+			return
+		}
+	}
+}
+
+func (c *Client) broadcastStatusUpdate(ctx context.Context, r *redis.Client) {
+	ctx, cancel := context.WithTimeout(ctx, time.Minute)
+	defer cancel()
+
+	res := r.PubSubNumSub(ctx, c.chatId)
+	count := fmt.Sprint(res.Val()[c.chatId])
+
+	r.Publish(ctx, c.chatId, event{Msg: count, Type: Status})
+}
+
+type eventType string
+
+const (
+	Init   eventType = "init"
+	Normal eventType = "normal"
+	Status eventType = "status"
+)
+
+type event struct {
+	Type     eventType `json:"type"`
+	Msg      string    `json:"msg"`
+	SenderId string    `json:"sender"`
+}
+
+func (e event) MarshalBinary() (data []byte, err error) {
+	return json.Marshal(e)
 }

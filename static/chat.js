@@ -8,7 +8,7 @@ const chatterName = /** @type  {HTMLHeadingElement} */ (
 );
 const eventTypes = {
   init: "init",
-  message: "message",
+  normal: "normal",
   status: "status",
 };
 
@@ -47,7 +47,7 @@ socket.addEventListener("message", (event) => {
     case eventTypes.init:
       chatterName.innerHTML = `Hi <strong>${sender}</strong>, type something!`;
       break;
-    case eventTypes.message:
+    case eventTypes.normal:
       appendTextToChat(`${sender}: ${msg}`);
       break;
     case eventTypes.status:
